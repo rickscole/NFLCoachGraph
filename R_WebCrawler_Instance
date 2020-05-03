@@ -1,0 +1,67 @@
+rfx_ParseOutHeading = function(rfxparam_BaseArray,rfxparam_Value){
+  rfxndx_Value = min(grep(rfxparam_Value,tolower(rfxparam_BaseArray)))
+  rfxparam_BaseArray = append(rfxparam_BaseArray,rfxparam_Value,after = rfxndx_Value)
+  rfxparam_BaseArray[rfxndx_Value] = gsub(rfxparam_Value,"",tolower(rfxparam_BaseArray[rfxndx_Value]))
+  rfxlist_return = list(rfxparam_BaseArray,rfxndx_Value)
+  return(rfxlist_return)
+}
+rfx_AttachHeadings = function(rfxparam_BaseArray,rfxparam_Value,rfxparam_startIndex,rfxparam_endIndex){
+  rfxparam_BaseArray = append(rfxparam_BaseArray,rep(rfxparam_Value,times = rfxparam_endIndex - rfxparam_startIndex))
+  return(rfxparam_BaseArray)
+}
+
+library(rvest)
+library(stringr)
+
+rarr_team = c("Miami_Dolphins")
+rarr_year = c(2011)
+rndx_Team = rarr_team[1]
+rndx_Year = rarr_year[1]
+rndx_tableIndex = 3
+rvar_url = paste('https://en.wikipedia.org/wiki/',rarr_year[1],'_',rarr_team[1],'_season',sep="")
+robj_webpage = read_html(rvar_url)
+rvar_xPath = paste('/html/body/div[3]/div[3]/div[4]/div/table[',rndx_tableIndex,']',sep="")
+robj_rankDataHTML = html_nodes(robj_webpage,xpath = rvar_xPath)
+robj_rankData = html_text(robj_rankDataHTML)
+#print(robj_rankData)
+rarr_elements_1 = unlist(strsplit(gsub("(^\\s+)|(\\s+$)", "",robj_rankData),"\n\n\n\n\n"))
+#print(rarr_elements_1)
+rarr_elements_2 = unlist(strsplit(gsub("(^\\s+)|(\\s+$)", "",rarr_elements_1),"\n\n"))
+print(rarr_elements_2)
+rarr_elements_3 = unlist(strsplit(gsub("(^\\s+)|(\\s+$)", "",rarr_elements_2),"\n"))
+#print(rarr_elements_3)
+rarr_elements_3 = rarr_elements_3[-1]
+rndx_FrontOffice = match("front office",tolower(rarr_elements_3))
+
+rlist_ParsedOutHeadings = rfx_ParseOutHeading(rarr_elements_3,"head coaches")
+rarr_elements_3 = rlist_ParsedOutHeadings[[1]]
+rndx_HeadCoaches = rlist_ParsedOutHeadings[[2]] + 1
+print(rarr_elements_3)
+rlist_ParsedOutHeadings = rfx_ParseOutHeading(rarr_elements_3,"offensive coaches")
+rarr_elements_3 = rlist_ParsedOutHeadings[[1]]
+rndx_OffensiveCoaches = rlist_ParsedOutHeadings[[2]] + 1
+#print(rarr_elements_3)
+rndx_DefensiveCoaches = match("defensive coaches",tolower(rarr_elements_3))
+rlist_ParsedOutHeadings = rfx_ParseOutHeading(rarr_elements_3,"special teams coaches")
+rarr_elements_3 = rlist_ParsedOutHeadings[[1]]
+rndx_SpecialTeamsCoaches = rlist_ParsedOutHeadings[[2]] + 1
+#print(rarr_elements_3)
+rlist_ParsedOutHeadings = rfx_ParseOutHeading(rarr_elements_3,"strength and conditioning")
+rarr_elements_3 = rlist_ParsedOutHeadings[[1]]
+rndx_StrengthAndConditioningCoaches = rlist_ParsedOutHeadings[[2]] + 1
+#print(rarr_elements_3)
+rarr_Headings = c()
+rarr_Headings = rfx_AttachHeadings(rarr_Headings,"front office",rndx_FrontOffice,rndx_HeadCoaches)
+rarr_Headings = rfx_AttachHeadings(rarr_Headings,"head coaches",rndx_HeadCoaches,rndx_OffensiveCoaches)
+rarr_Headings = rfx_AttachHeadings(rarr_Headings,"offensive coaches",rndx_OffensiveCoaches,rndx_DefensiveCoaches)
+rarr_Headings = rfx_AttachHeadings(rarr_Headings,"defensive coaches",rndx_DefensiveCoaches,rndx_SpecialTeamsCoaches)
+rarr_Headings = rfx_AttachHeadings(rarr_Headings,"special teams coaches",rndx_SpecialTeamsCoaches,rndx_StrengthAndConditioningCoaches)
+rarr_Headings = rfx_AttachHeadings(rarr_Headings,"strength and conditioning",rndx_StrengthAndConditioningCoaches,length(rarr_elements_3)+1)
+#print(rarr_Headings)
+rarr_CurrentYear = rep(rarr_year[rndx_Year],times = length(rarr_Headings))
+rarr_CurrentTeam = rep(rarr_team[rndx_Team],times = length(rarr_Headings))
+rarr_Position = sapply(strsplit(rarr_elements_3, split=' \u2013 ', fixed=TRUE), `[`, 1)
+rarr_Person = sapply(strsplit(rarr_elements_3, split=' \u2013 ', fixed=TRUE), `[`, 2)
+rdf_ElementHeading = cbind(rarr_Position,rarr_Person,rarr_Headings,rarr_CurrentYear,rarr_CurrentTeam)
+rdf_ElementHeading = rdf_ElementHeading[-c(rndx_FrontOffice,rndx_HeadCoaches,rndx_OffensiveCoaches,rndx_DefensiveCoaches,rndx_SpecialTeamsCoaches,rndx_StrengthAndConditioningCoaches),]
+print(rdf_ElementHeading)
