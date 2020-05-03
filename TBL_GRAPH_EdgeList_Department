@@ -1,0 +1,15 @@
+ID_DepartmentEdge	Department_1	Department_2
+1	front office	head coaches
+2	head coaches	front office
+3	head coaches	offensive coaches
+4	head coaches	defensive coaches
+5	head coaches	special teams coaches
+6	offensive coaches	head coaches
+7	offensive coaches	strength and conditioning
+8	defensive coaches	head coaches
+9	defensive coaches	strength and conditioning
+10	special teams coaches	head coaches
+11	special teams coaches	strength and conditioning
+13	strength and conditioning	offensive coaches
+14	strength and conditioning	defensive coaches
+15	strength and conditioning	special teams coaches
