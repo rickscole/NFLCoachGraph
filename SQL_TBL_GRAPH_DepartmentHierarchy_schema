@@ -1,0 +1,18 @@
+USE [practice]
+GO
+
+/****** Object:  Table [dbo].[TBL_GRAPH_DepartmentHierarchy]    Script Date: 5/3/2020 2:42:22 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[TBL_GRAPH_DepartmentHierarchy](
+	[ID_DepartmentHierarchy] [int] NULL,
+	[Department] [nvarchar](128) NULL,
+	[Hierarchy] [int] NULL
+) ON [PRIMARY]
+GO
+
+
