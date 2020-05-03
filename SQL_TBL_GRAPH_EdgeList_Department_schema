@@ -1,0 +1,18 @@
+USE [practice]
+GO
+
+/****** Object:  Table [dbo].[TBL_GRAPH_EdgeList_Department]    Script Date: 5/3/2020 3:37:57 PM ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[TBL_GRAPH_EdgeList_Department](
+	[ID_DepartmentEdge] [int] NULL,
+	[Department_1] [nvarchar](255) NULL,
+	[Department_2] [nvarchar](255) NULL
+) ON [PRIMARY]
+GO
+
+
