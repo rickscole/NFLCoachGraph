@@ -1,0 +1,176 @@
+USE practice
+
+
+-- N202002171140, rsc
+-- not using these string splits because they cause too many problems in the case of "strength and/& conditioning"
+
+-- get stats to remove parenthetical strings from person ; filter out NA values
+;WITH tRemovingParenthesis_Stats_Name AS
+(
+	SELECT *,
+	CHARINDEX('(',person) AS Parenthesis_Start,
+	CHARINDEX(')',person) AS Parenthesis_End,
+	CHARINDEX(')',person) - CHARINDEX('(',person)  AS Parenthesis_Length
+	FROM TBL_GRAPH_PositionYearTeam003
+	WHERE person != 'NA'
+	--AND person != 'NULL'
+	--AND position != 'NA'
+	--AND position != 'NULL'
+
+),
+-- remove parenthetical strings from person ; string split position on existence of /
+tStringSplit_Position AS
+(
+	SELECT ID,
+	tPosition_CA_slash.value AS position,
+	CASE WHEN Parenthesis_Length > 0 THEN SUBSTRING(person,1,Parenthesis_Start - 1) ELSE person END AS person,
+	department,
+	year,
+	team
+	FROM tRemovingParenthesis_Stats_Name
+	CROSS APPLY STRING_SPLIT(position, '/') tPosition_CA_slash
+	-- CROSS APPLY STRING_SPLIT(position, 'and') tPosition_CA_and --N202002171140
+	-- CROSS APPLY STRING_SPLIT(position, '&') tPosition_CA_ampersand --N202002171140
+),
+-- string split person on existence of / ; string split perosn on existence of " and ", using replace method ; string split person on existence of "," using replace method
+tStringSplit_Person AS
+(
+	SELECT ID,
+	position,
+	tPerson_CA_slash.value AS person,
+	department,
+	year,
+	team
+	FROM tStringSplit_Position
+	CROSS APPLY STRING_SPLIT(REPLACE(REPLACE(person,',',' and '),' and ', '/'),'/') tPerson_CA_slash
+),
+-- trim and replace superfluous values from person
+tTrimAndReplace_Person AS
+(
+	SELECT ID,
+	position,
+	RTRIM(LTRIM(
+	REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(person,'.',''),'Jr','II'),'Dr ',''),'†',''),'*',''),'[1]','')
+	)) AS person,
+	department,
+	year,
+	team
+	FROM tStringSplit_Person
+),
+-- add in department ID for vertical and horizontal connections; filter out team - years with superfluous entries
+tDepartmentID AS
+(
+	SELECT tTrimAndReplace_Person.*,
+	ROW_NUMBER() OVER(PARTITION BY department, year, team ORDER BY ID) AS ID_Department
+	FROM tTrimAndReplace_Person
+	WHERE 1=1	
+	AND NOT (team = 'Baltimore_Ravens' AND year < 1996)
+	AND NOT (team = 'Cleveland_Browns' AND year IN (1996,1997,1998))
+	AND NOT (team = 'Houston_Texans' AND year < 2002)
+	AND NOT (team = 'Houston_Oilers' AND year > 1996)
+	AND NOT (team = 'Jacksonville_Jaguars' AND year < 1995)
+	AND NOT (team = 'Tennessee_Titans' AND year < 1999)
+	AND NOT (team = 'Tennessee_Oilers' AND year NOT IN (1997,1998))
+	AND NOT (team = 'Oakland_Raiders' AND year < 1995)
+	AND NOT (team = 'Los_Angeles_Raiders' AND year > 1994)
+	AND NOT (team = 'San_Diego_Chargers' AND year > 2016)
+	AND NOT (team = 'Los_Angeles_Chargers' AND year < 2017)
+	AND NOT (team = 'Carolina_Panthers' AND year < 1995)
+	AND NOT (team = 'Los_Angeles_Rams' AND year > 1994 AND year < 2016)
+	AND NOT (team = 'St._Louis_Rams' AND year > 2015)
+	AND NOT (team = 'St._Louis_Rams' AND year < 1995)
+	AND NOT (team = 'Arizona_Cardinals' AND year < 1994)
+	AND NOT (team = 'Phoenix_Cardinals' AND year > 1993)
+),
+tDepartmentHiearchy AS
+(
+	SELECT tDepartmentID.*,
+	TBL_GRAPH_DepartmentHierarchy.ID_DepartmentHierarchy,
+	TBL_GRAPH_DepartmentHierarchy.Hierarchy
+	FROM tDepartmentID
+	LEFT JOIN TBL_GRAPH_DepartmentHierarchy
+	ON tDepartmentID.department = TBL_GRAPH_DepartmentHierarchy.department
+),
+tFullTable AS
+(
+	SELECT tDepartmentHiearchy.ID,
+	tDepartmentHiearchy.position,
+	REPLACE(UPPER(tDepartmentHiearchy.person),' ','_') AS person,
+	tDepartmentHiearchy.department,
+	tDepartmentHiearchy.year,
+	tDepartmentHiearchy.team,
+	COALESCE(tConnections_Vertical.ID,tConnections_Horizontal.ID) AS ID_associated,
+	REPLACE(UPPER(COALESCE(tConnections_Vertical.person,tConnections_Horizontal.person)),' ','_') AS person_associated,
+	COALESCE(tConnections_Vertical.position,tConnections_Horizontal.position) AS position_associated,
+	COALESCE(tConnections_Vertical.department,tConnections_Horizontal.department) AS department_associated,
+	CASE WHEN tDepartmentHiearchy.Hierarchy < COALESCE(tConnections_Vertical.Hierarchy,tConnections_Horizontal.Hierarchy) THEN 1
+		WHEN tDepartmentHiearchy.Hierarchy > COALESCE(tConnections_Vertical.Hierarchy,tConnections_Horizontal.Hierarchy) THEN -1
+		ELSE 0
+	END AS graphDirection
+	FROM tDepartmentHiearchy
+	LEFT JOIN 
+		(
+		SELECT tDepartmentHiearchy.*
+		FROM tDepartmentHiearchy
+		WHERE ID_Department = 1
+		)
+	tConnections_Vertical
+	ON tDepartmentHiearchy.department = tConnections_Vertical.department -- same department
+	AND tDepartmentHiearchy.year = tConnections_Vertical.year -- same year
+	AND tDepartmentHiearchy.team = tConnections_Vertical.team -- same team
+	--AND (tDepartmentHiearchy.ID != tConnections_Vertical.ID OR tDepartmentHiearchy.ID_Department = tConnections_Vertical.ID_Department)
+	AND tDepartmentHiearchy.ID != tConnections_Vertical.ID  -- connect with department head
+	LEFT JOIN
+		(
+		SELECT tDepartmentHiearchy.*
+		FROM tDepartmentHiearchy
+		WHERE ID_Department = 1
+		)
+	tConnections_Horizontal
+	ON tDepartmentHiearchy.year = tConnections_Horizontal.year -- same year
+	AND tDepartmentHiearchy.team = tConnections_Horizontal.team -- same team
+	AND tDepartmentHiearchy.ID != tConnections_Horizontal.ID  -- connect with other department heads
+	AND tDepartmentHiearchy.ID_Department = tConnections_Horizontal.ID_Department -- ensure only department heads (unnecessary)
+	AND tDepartmentHiearchy.Hierarchy <= COALESCE(tConnections_Vertical.Hierarchy,tConnections_Horizontal.Hierarchy) -- enforce hierarchy rules / remove repetitive edges
+	INNER JOIN TBL_GRAPH_EdgeList_Department tEdgeDept
+	ON tDepartmentHiearchy.department = tEdgeDept.[Department_1]
+	AND COALESCE(tConnections_Vertical.department,tConnections_Horizontal.department) = tEdgeDept.[Department_2]
+	WHERE LTRIM(RTRIM(tDepartmentHiearchy.[person])) != ''
+	AND tDepartmentHiearchy.[person] IS NOT NULL
+	AND LTRIM(RTRIM(tDepartmentHiearchy.[person])) != ''
+	AND tDepartmentHiearchy.[person] IS NOT NULL
+	AND COALESCE(tConnections_Vertical.person,tConnections_Horizontal.person) != ''
+	AND COALESCE(tConnections_Vertical.person,tConnections_Horizontal.person) IS NOT NULL
+)
+SELECT person,
+person_associated,
+CAST(CAST(1 AS DECIMAL(12,8))/CAST(COUNT(*) AS DECIMAL(12,8)) AS DECIMAL(12,8)) AS Weight 
+FROM tFullTable
+WHERE year >= 2008
+--AND (position = 'Head coach' OR position_associated = 'Head coach')
+--AND department NOT IN ('front office','strength and conditioning')
+--AND department_associated NOT IN ('front office','strength and conditioning') 
+GROUP BY person,
+person_associated
+
+
+
+/*
+SELECT DISTINCT REPLACE(person,' ','_') AS person,
+REPLACE(person_associated,' ','_') AS person_associated
+FROM tFullTable
+WHERE person IS NOT NULL
+AND person_associated IS NOT NULL
+AND year >= 2016
+AND (position = 'Head coach' OR position_associated = 'Head coach')
+AND department NOT IN ('front office','strength and conditioning')
+AND department_associated NOT IN ('front office','strength and conditioning')
+AND graphDirection >= 0
+*/
+
+--AND tDepartmentHiearchy.year >= 2012
+--WHERE --position = 'Head coach'
+--tDepartmentHiearchy.year != 2099
+--AND tDepartmentHiearchy.team = 'Minnesota_Vikings'
+--ORDER BY tDepartmentHiearchy.ID ASC
+--SELECT * FROM tFullTable
